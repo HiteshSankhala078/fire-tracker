@@ -336,7 +336,7 @@ function renderDashboard(el) {
   const recent = [...entries].sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || '')).slice(0, 5);
   let alert = '';
   if (c.overdue || c.week) alert = `<div class="alert"><div class="ic">${ic('bell', 19)}</div><div><b>${c.overdue ? c.overdue + ' overdue' : ''}${c.overdue && c.week ? ' · ' : ''}${c.week ? c.week + ' due in next 7 days' : ''}</b><p>Call or WhatsApp these customers to book their refilling.</p></div><button class="btn btn-sm btn-primary" id="seeAtt">View list</button></div>`;
-  const firstRun = !entries.length ? `<div class="card" style="padding:22px;margin-bottom:18px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b style="font-size:16px">Welcome! Your tracker is empty.</b><p style="color:var(--ink2);font-size:14px;margin-top:4px">Add your first sale, or import the 5 certificates from your document to get started.</p></div><button class="btn btn-ghost" id="impSeed">${ic('upload', 17)}Import 5 certificates</button><button class="btn btn-primary" data-action="new">${ic('plus', 17, 2.4)}New entry</button></div>` : '';
+  const firstRun = !entries.length ? `<div class="card" style="padding:22px;margin-bottom:18px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b style="font-size:16px">Welcome! Your tracker is empty.</b><p style="color:var(--ink2);font-size:14px;margin-top:4px">Tap “New entry” to add your first sale with its certificate.</p></div><button class="btn btn-primary" data-action="new">${ic('plus', 17, 2.4)}New entry</button></div>` : '';
   el.innerHTML = `
   <label class="search mobile-search"><span>${ic('search', 17)}</span><input id="mSearch" type="search" placeholder="Search shop, person, mobile…" autocomplete="off"></label>
   ${firstRun}${alert}
@@ -659,14 +659,12 @@ function openSettings() {
      ${!isNative && isIOS && !isStandalone ? `<div class="set-row"><div class="sic">${ic('upload', 18)}</div><div class="t"><b>Install on iPhone</b><small>Safari → Share ⬆ → “Add to Home Screen”</small></div></div>` : ''}
      <div class="set-row"><div class="sic">${ic('down', 18)}</div><div class="t"><b>Backup to Excel (CSV)</b><small>All entries in one sheet</small></div><button class="btn btn-sm btn-ghost" data-csv>Export</button></div>
      <div class="set-row"><div class="sic">${ic('file', 18)}</div><div class="t"><b>Full backup (JSON)</b><small>Every field, for safe keeping</small></div><button class="btn btn-sm btn-ghost" data-json>Export</button></div>
-     <div class="set-row"><div class="sic">${ic('upload', 18)}</div><div class="t"><b>Import 5 certificates</b><small>From your fire-safety document (skips ones already imported)</small></div><button class="btn btn-sm btn-ghost" data-seed>Import</button></div>
      <div class="set-row"><div class="sic">${ic('refresh', 18)}</div><div class="t"><b>Sync now</b><small id="syncInfo">${offline ? 'Offline — showing saved copy' : 'Connected'} · ${entries.length} entries</small></div><button class="btn btn-sm btn-ghost" data-sync>Refresh</button></div>
    </div></div>`);
   $('[data-x]', w).addEventListener('click', w._close);
   $('[data-logout]', w).addEventListener('click', async () => { if (!await confirmBox('Sign out?', 'You’ll need your email and password to sign in again on this device. Your data stays safe online.', 'Sign out')) return; closeLayer(w); try { await sb.auth.signOut(); } catch (_) { renderLogin(); } });
   $('[data-csv]', w).addEventListener('click', exportCSV);
   $('[data-json]', w).addEventListener('click', exportJSON);
-  $('[data-seed]', w).addEventListener('click', () => { closeLayer(w); importSeed(); });
   $('[data-sync]', w).addEventListener('click', async () => { await fetchAll(); toast(offline ? 'Still offline' : 'Synced'); const s = $('#syncInfo', w); if (s) s.textContent = (offline ? 'Offline' : 'Connected') + ' · ' + entries.length + ' entries'; });
   if (isNative && LN) {
     const st = $('#nStat', w);
