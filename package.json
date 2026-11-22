@@ -1,0 +1,22 @@
+{
+  "name": "arav-fire-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Arav Fire Safety · Refill Tracker (web app + Android APK)",
+  "scripts": {
+    "android:icons": "capacitor-assets generate --android --iconBackgroundColor '#E23D28' --iconBackgroundColorDark '#E23D28' --splashBackgroundColor '#F5F6F8' --splashBackgroundColorDark '#F5F6F8'"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/browser": "8.0.5",
+    "@capacitor/core": "8.6.2",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/local-notifications": "8.3.1",
+    "@capacitor/share": "8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "4.0.0",
+    "@capacitor/cli": "8.6.2"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "appId": "in.arav.firetracker",
+  "appName": "Fire Tracker",
+  "webDir": "www",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "auto"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_fire",
+      "iconColor": "#E23D28"
+    }
+  }
+}
