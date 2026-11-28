@@ -33,7 +33,8 @@ const P = {
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   android:'<path d="M5 16V9a7 7 0 0 1 14 0v7a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1zM8 4 6.5 2M16 4l1.5-2M9 9h.01M15 9h.01M3 10v4M21 10v4"/>',
   lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
-  wifi:'<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0M12 20h.01"/>'
+  wifi:'<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0M12 20h.01"/>',
+  pin:'<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'
 };
 function ic(n, s = 20, w = 2) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${P[n] || ''}</svg>`; }
 
@@ -162,7 +163,7 @@ function renderLogin(err) {
 }
 
 /* ---------------- App shell ---------------- */
-const NAV = { dashboard: ['home','Dashboard','Home'], entries: ['list','All entries','Entries'], monthly: ['cal','Monthly view','Monthly'] };
+const NAV = Object.assign({ dashboard: ['home','Dashboard','Home'], entries: ['list','All entries','Entries'] }, window.FTLeads ? { leads: ['pin','Leads & visits','Leads'] } : {}, { monthly: ['cal','Monthly view','Monthly'] });
 
 function renderShell() {
   $('#root').innerHTML = `<div class="app">
@@ -186,18 +187,19 @@ function renderShell() {
   <nav class="tabbar">
     <button class="tab" data-nav="dashboard">${ic('home', 22)}Home<span class="badge hidden" data-badge></span></button>
     <button class="tab" data-nav="entries">${ic('list', 22)}Entries</button>
+    ${window.FTLeads ? `<button class="tab" data-nav="leads">${ic('pin', 22)}Leads<span class="badge hidden" data-lbadge></span></button>` : ''}
     <button class="tab" data-action="new"><span class="fab">${ic('plus', 24, 2.4)}</span></button>
     <button class="tab" data-nav="monthly">${ic('cal', 22)}Monthly</button>
     <button class="tab" data-action="settings">${ic('gear', 22)}More</button>
   </nav>`;
-  $('#globalSearch').addEventListener('input', e => { query = e.target.value; if (view !== 'entries') go('entries'); else renderList(); });
+  $('#globalSearch').addEventListener('input', e => { query = e.target.value; if (view === 'leads' && window.FTLeads) { FTLeads.search(query); return; } if (view !== 'entries') go('entries'); else renderList(); });
 }
 
 document.addEventListener('click', e => {
   const n = e.target.closest('[data-nav]'); if (n) { go(n.dataset.nav); return; }
   const a = e.target.closest('[data-action]'); if (!a) return;
   const act = a.dataset.action;
-  if (act === 'new') openForm();
+  if (act === 'new') { if (view === 'leads' && window.FTLeads) FTLeads.openForm(); else openForm(); }
   else if (act === 'settings') openSettings();
 });
 
@@ -244,6 +246,7 @@ async function fetchAll() {
   }
   if (view === 'entries' && $('#entryList')) renderList(); else render();
   scheduleReminders();
+  if (window.FTLeads) FTLeads.refresh();
 }
 
 function subscribeLive() {
@@ -296,12 +299,13 @@ async function removeDocs(paths) { if (!paths.length) return; try { await sb.sto
 function greeting() { const h = new Date().getHours(); return (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening') + ' · ' + fmt(iso(today())); }
 function render() {
   const el = $('#view'); if (!el) return;
-  const titles = { dashboard: 'Dashboard', entries: 'All entries', monthly: 'Monthly view' };
+  const titles = { dashboard: 'Dashboard', entries: 'All entries', monthly: 'Monthly view', leads: 'Leads & visits' };
   $('#pageTitle').innerHTML = esc(titles[view]) + (offline && loaded ? `<span class="offline-tag">${ic('wifi', 13)}Offline</span>` : '');
   updateBadges();
   if (!loaded) { el.innerHTML = skeleton(); $('#pageSub').textContent = 'Loading…'; return; }
   if (view === 'dashboard') renderDashboard(el);
   else if (view === 'entries') renderEntries(el);
+  else if (view === 'leads' && window.FTLeads) FTLeads.render(el);
   else renderMonthly(el);
 }
 function skeleton() { let r = ''; for (let i = 0; i < 5; i++) r += `<div class="row" style="cursor:default"><div class="avatar skel" style="height:42px"></div><div class="mid"><div class="skel" style="width:55%;margin-bottom:8px"></div><div class="skel" style="width:35%;height:11px"></div></div></div>`; return `<div class="stats">${'<div class="card stat"><div class="skel" style="width:60%"></div><div class="skel" style="width:40%;height:26px;margin-top:12px"></div></div>'.repeat(4)}</div><div class="card"><div class="section-h"><div class="skel" style="width:140px"></div></div>${r}</div>`; }
@@ -339,7 +343,7 @@ function renderDashboard(el) {
   const firstRun = !entries.length ? `<div class="card" style="padding:22px;margin-bottom:18px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b style="font-size:16px">Welcome! Your tracker is empty.</b><p style="color:var(--ink2);font-size:14px;margin-top:4px">Tap “New entry” to add your first sale with its certificate.</p></div><button class="btn btn-primary" data-action="new">${ic('plus', 17, 2.4)}New entry</button></div>` : '';
   el.innerHTML = `
   <label class="search mobile-search"><span>${ic('search', 17)}</span><input id="mSearch" type="search" placeholder="Search shop, person, mobile…" autocomplete="off"></label>
-  ${firstRun}${alert}
+  ${firstRun}${alert}${window.FTLeads ? FTLeads.dashboardHTML() : ''}
   <div class="stats">
     ${stat('overdue', 'Overdue', c.overdue, 'Refill date passed', ['#FEECEB','#D92D20'], 'alert')}
     ${stat('soon', 'Due in 7 days', c.week, 'Reminder window', ['#FEF4E6','#B54708'], 'clock')}
@@ -357,6 +361,7 @@ function renderDashboard(el) {
     </div>
   </div>`;
   bindRows(el);
+  if (window.FTLeads) FTLeads.bindDashboard(el);
   $$('[data-stat]', el).forEach(s => s.addEventListener('click', () => { const k = s.dataset.stat; if (k === 'month') { monthSel = { y: t.getFullYear(), m: t.getMonth() }; go('monthly'); } else { filter = k === 'all' ? 'all' : k; go('entries'); } }));
   const sa = $('#seeAtt', el); if (sa) sa.addEventListener('click', () => { filter = 'attention'; go('entries'); });
   const is = $('#impSeed', el); if (is) is.addEventListener('click', importSeed);
@@ -494,6 +499,7 @@ function openDetail(id) {
        <div><div class="k">Contact person</div><div class="v">${esc(e.person || '—')}</div></div>
        <div><div class="k">Mobile</div><div class="v">${esc(e.phone || '—')}</div></div>
        <div class="full"><div class="k">Address</div><div class="v">${esc(e.address || '—')}${e.area ? ` <span class="d-type">${esc(e.area)}</span>` : ''}</div></div>
+       ${e.location ? `<div class="full"><button class="btn btn-sm btn-ghost" data-map>${ic('pin', 15)}Open location in map</button></div>` : ''}
        ${e.billNo || e.amount ? `<div><div class="k">Bill no.</div><div class="v">${esc(e.billNo || '—')}</div></div><div><div class="k">Amount</div><div class="v">${e.amount ? money(e.amount) : '—'}</div></div>` : ''}
      </div>
      ${(e.items || []).length ? `<div class="blk-h">Extinguishers</div><table class="it"><thead><tr><th>Type</th><th>Capacity</th><th>Qty</th></tr></thead><tbody>${e.items.map(i => `<tr><td>${esc(i.type || '')}</td><td>${i.capacity ? esc(i.capacity) + ' Kg' : '—'}</td><td>${esc(i.qty || 0)}</td></tr>`).join('')}</tbody></table>` : ''}
@@ -509,6 +515,7 @@ function openDetail(id) {
   $('[data-call]', w).addEventListener('click', () => tel && openExternal('tel:' + tel));
   $('[data-wa]', w).addEventListener('click', () => wa && openExternal(wa));
   $('[data-cal]', w).addEventListener('click', () => $('#calBox', w).classList.toggle('hidden'));
+  const mp = $('[data-map]', w); if (mp) mp.addEventListener('click', () => openExternal(window.FTLeads ? FTLeads.mapUrl(e) : e.location));
   $$('[data-g]', w).forEach(b => b.addEventListener('click', () => openExternal(gcalLink(e, +b.dataset.g, b.dataset.g === '0' ? '(due today)' : '(7 day reminder)'))));
   $('[data-edit]', w).addEventListener('click', () => { closeLayer(w); openForm(e); });
   $$('[data-doc]', w).forEach(b => b.addEventListener('click', () => openDoc(docs[+b.dataset.doc])));
@@ -522,12 +529,13 @@ function openDetail(id) {
 }
 
 /* ---------------- Form ---------------- */
-function openForm(e, renewFrom) {
-  const isEdit = !!e; const src = e || renewFrom || {};
+function openForm(e, renewFrom, opts) {
+  opts = opts || {};
+  const isEdit = !!e; const src = e || renewFrom || opts.prefill || {};
   const t = iso(today());
   const f = {
     type: isEdit ? (e.type || 'Refilling') : (renewFrom ? 'Refilling' : 'New Installation'),
-    shop: src.shop || '', person: src.person || '', phone: src.phone || '', address: src.address || '', area: src.area || '',
+    shop: src.shop || '', person: src.person || '', phone: src.phone || '', address: src.address || '', area: src.area || '', location: src.location || '',
     date: isEdit ? (e.date || t) : t, dueDate: isEdit ? (e.dueDate || addYearMinusDay(e.date || t)) : addYearMinusDay(t), dueManual: isEdit,
     items: (src.items && src.items.length ? src.items : [{ type: 'ABC Type', capacity: '6', qty: 1 }]).map(i => ({ ...i })),
     billNo: isEdit ? (e.billNo || '') : '', amount: isEdit ? (e.amount || '') : '', payment: isEdit ? (e.payment || 'Paid') : 'Paid', notes: isEdit ? (e.notes || '') : '',
@@ -546,7 +554,7 @@ function openForm(e, renewFrom) {
         <div class="f"><label>Mobile number</label><input name="phone" type="tel" inputmode="tel" placeholder="98XXXXXXXX" autocomplete="off"></div>
         <div class="f full"><label>Address</label><textarea name="address" rows="2" placeholder="Shop no., complex, road, city"></textarea></div>
         <div class="f"><label>Area</label><input name="area" placeholder="e.g. Satellite, Bopal" list="areas" autocomplete="off"><datalist id="areas">${[...new Set(entries.map(x => x.area).filter(Boolean))].map(a => `<option value="${esc(a)}">`).join('')}</datalist></div>
-        <div class="f"></div>
+        <div class="f"><label>Map location</label><input name="location" placeholder="Paste Google Maps link" autocomplete="off"><span class="help"><a href="#" data-geo style="color:var(--brand);font-weight:700">📍 Use my current location</a></span></div>
         <div class="f" id="fDate"><label>Sale / Refill date <em>*</em></label><input name="date" type="date"></div>
         <div class="f"><label>Refill due date</label><input name="dueDate" type="date"><span class="help" id="dueHelp">Auto: 1 year from service date</span></div>
         <div class="fs-title">Extinguishers</div>
@@ -566,7 +574,7 @@ function openForm(e, renewFrom) {
     <div class="sheet-f"><button class="btn btn-ghost" data-cancel style="flex:1">Cancel</button><button class="btn btn-primary" data-save style="flex:2">${ic('check', 18, 2.4)}${isEdit ? 'Save changes' : 'Save entry'}</button></div>
   </div>`);
   const fm = $('#fm', w);
-  const FIELDS = ['shop','person','phone','address','area','date','dueDate','billNo','amount','notes'];
+  const FIELDS = ['shop','person','phone','address','area','location','date','dueDate','billNo','amount','notes'];
   FIELDS.forEach(k => { if (fm.elements[k]) fm.elements[k].value = f[k] == null ? '' : f[k]; });
   function seg(id, key) { const s = $(id, w); const upd = () => $$('button', s).forEach(b => b.classList.toggle('on', b.dataset.v === f[key])); $$('button', s).forEach(b => b.addEventListener('click', () => { f[key] = b.dataset.v; upd(); })); upd(); }
   seg('#segType', 'type'); seg('#segPay', 'payment');
@@ -615,6 +623,7 @@ function openForm(e, renewFrom) {
   w._close = cancel;
   $('[data-x]', w).addEventListener('click', cancel); $('[data-cancel]', w).addEventListener('click', cancel);
   fm.addEventListener('submit', ev => ev.preventDefault());
+  const geo = $('[data-geo]', w); if (geo) geo.addEventListener('click', ev => { ev.preventDefault(); if (window.FTLeads) FTLeads.fillGeo(fm.elements.location); });
   $('[data-save]', w).addEventListener('click', async () => {
     FIELDS.forEach(k => f[k] = fm.elements[k].value.trim());
     $('#fShop', w).classList.toggle('err', !f.shop); $('#fDate', w).classList.toggle('err', !pd(f.date));
@@ -622,7 +631,7 @@ function openForm(e, renewFrom) {
     if (uploading) { toast('Wait — files still uploading'); return; }
     if (!pd(f.dueDate)) f.dueDate = addYearMinusDay(f.date);
     const now = new Date().toISOString();
-    const body = { type: f.type, shop: f.shop, person: f.person, phone: f.phone, address: f.address, area: f.area, date: f.date, dueDate: f.dueDate,
+    const body = { type: f.type, shop: f.shop, person: f.person, phone: f.phone, address: f.address, area: f.area, location: f.location, date: f.date, dueDate: f.dueDate,
       items: f.items.filter(i => i.type).map(i => ({ type: i.type, capacity: String(i.capacity || ''), qty: +i.qty || 0 })),
       billNo: f.billNo, amount: f.amount ? +f.amount : 0, payment: f.payment, notes: f.notes,
       docs: f.docs.filter(d => d.path).map(d => ({ path: d.path, name: d.name, kind: d.kind, contentType: d.contentType || '', size: d.size || 0 })),
@@ -637,6 +646,7 @@ function openForm(e, renewFrom) {
       } else {
         if (renewFrom) body.renewedFrom = renewFrom.id;
         const newId = await dbInsert(body);
+        if (opts.onSaved) { try { await opts.onSaved(newId, body); } catch (_) {} }
         if (renewFrom) await dbPatch(renewFrom.id, { status: 'renewed', renewedBy: newId, updatedAt: now });
       }
       closeLayer(w);
@@ -657,6 +667,7 @@ function openSettings() {
        : `<div class="set-row"><div class="sic" style="background:var(--brand-l);color:var(--brand)">${ic('bell', 18)}</div><div class="t"><b>Reminders</b><small>Automatic phone reminders work in the Android app. On iPhone / PC, open an entry → Calendar to add Google Calendar reminders.</small></div></div>`}
      ${!isNative ? `<div class="set-row"><div class="sic">${ic('android', 18)}</div><div class="t"><b>Android app (APK)</b><small>Install on Android for automatic reminders</small></div><a class="btn btn-sm btn-primary" href="app/arav-fire-tracker.apk" download>${ic('down', 15)}Download</a></div>` : ''}
      ${!isNative && isIOS && !isStandalone ? `<div class="set-row"><div class="sic">${ic('upload', 18)}</div><div class="t"><b>Install on iPhone</b><small>Safari → Share ⬆ → “Add to Home Screen”</small></div></div>` : ''}
+     ${window.FTLeads ? FTLeads.settingsRowHTML() : ''}
      <div class="set-row"><div class="sic">${ic('down', 18)}</div><div class="t"><b>Backup to Excel (CSV)</b><small>All entries in one sheet</small></div><button class="btn btn-sm btn-ghost" data-csv>Export</button></div>
      <div class="set-row"><div class="sic">${ic('file', 18)}</div><div class="t"><b>Full backup (JSON)</b><small>Every field, for safe keeping</small></div><button class="btn btn-sm btn-ghost" data-json>Export</button></div>
      <div class="set-row"><div class="sic">${ic('refresh', 18)}</div><div class="t"><b>Sync now</b><small id="syncInfo">${offline ? 'Offline — showing saved copy' : 'Connected'} · ${entries.length} entries</small></div><button class="btn btn-sm btn-ghost" data-sync>Refresh</button></div>
@@ -664,6 +675,7 @@ function openSettings() {
   $('[data-x]', w).addEventListener('click', w._close);
   $('[data-logout]', w).addEventListener('click', async () => { if (!await confirmBox('Sign out?', 'You’ll need your email and password to sign in again on this device. Your data stays safe online.', 'Sign out')) return; closeLayer(w); try { await sb.auth.signOut(); } catch (_) { renderLogin(); } });
   $('[data-csv]', w).addEventListener('click', exportCSV);
+  const pl = $('[data-pricelist]', w); if (pl) pl.addEventListener('click', () => { closeLayer(w); FTLeads.openPriceList(); });
   $('[data-json]', w).addEventListener('click', exportJSON);
   $('[data-sync]', w).addEventListener('click', async () => { await fetchAll(); toast(offline ? 'Still offline' : 'Synced'); const s = $('#syncInfo', w); if (s) s.textContent = (offline ? 'Offline' : 'Connected') + ' · ' + entries.length + ' entries'; });
   if (isNative && LN) {
@@ -749,7 +761,7 @@ async function scheduleReminders() {
     const sig = top.map(n => n.at.getTime() + n.title + n.body).join('|');
     if (sig === lastSchedSig) return;
     const pend = await LN.getPending();
-    const old = (pend.notifications || []).filter(n => n.id !== 99999);
+    const old = (pend.notifications || []).filter(n => n.id !== 99999 && n.id < 1000);
     if (old.length) await LN.cancel({ notifications: old.map(n => ({ id: n.id })) });
     if (top.length) await LN.schedule({ notifications: top.map((n, i) => ({ id: i + 1, title: n.title, body: n.body, schedule: { at: n.at, allowWhileIdle: true }, smallIcon: 'ic_stat_fire', iconColor: '#E23D28', extra: { entryId: n.id } })) });
     lastSchedSig = sig;
@@ -764,7 +776,7 @@ async function setupNative() {
       let p = await LN.checkPermissions();
       if (p.display === 'prompt' || p.display === 'prompt-with-rationale') p = await LN.requestPermissions();
       try { await LN.createChannel({ id: 'default', name: 'Refill reminders', importance: 4, visibility: 1, vibration: true }); } catch (_) {}
-      LN.addListener('localNotificationActionPerformed', a => { const id = a && a.notification && a.notification.extra && a.notification.extra.entryId; if (id) { go('dashboard'); setTimeout(() => openDetail(id), 300); } });
+      LN.addListener('localNotificationActionPerformed', a => { const id = a && a.notification && a.notification.extra && a.notification.extra.entryId; if (id) { go('dashboard'); setTimeout(() => openDetail(id), 300); } const lid = a && a.notification && a.notification.extra && a.notification.extra.leadId; if (lid && window.FTLeads) { go('leads'); setTimeout(() => FTLeads.openDetail(lid), 400); } });
       scheduleReminders();
     } catch (_) {}
   }
@@ -774,5 +786,6 @@ async function setupNative() {
   }
 }
 
+window.FT = { get sb() { return sb; }, get user() { return user; }, get entries() { return entries; }, get view() { return view; }, $, $$, ic, esc, fmt, pd, iso, today, daysUntil, initials, money, phoneDigits, openLayer, closeLayer, confirmBox, toast, uploadDoc, signedUrl, removeDocs, openDoc, docKind, openExternal, openForm, go, render, plug, saveFile, isNative, REMIND_H, BIZ, EXT_TYPES };
 boot();
 })();
